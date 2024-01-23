@@ -1,55 +1,10 @@
-use std::fmt::{Display, Formatter};
-// Uncomment this block to pass the first stage
-use anyhow::bail;
-use anyhow::Result;
+mod request;
+mod response;
+
+use crate::request::HttpRequest;
+use crate::response::{HttpResponse, StatusCode};
+use std::fmt::Display;
 use tokio::net::TcpListener;
-
-#[derive(Debug)]
-pub enum StatusCode {
-    Ok,
-}
-
-impl Default for StatusCode {
-    fn default() -> Self {
-        StatusCode::Ok
-    }
-}
-
-impl Display for StatusCode {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                StatusCode::Ok => {
-                    "200"
-                }
-            }
-        )
-    }
-}
-
-impl TryFrom<&str> for StatusCode {
-    type Error = anyhow::Error;
-
-    fn try_from(value: &str) -> Result<Self> {
-        match value {
-            "200" => Ok(Self::Ok),
-            _ => bail!("invalid status code provided"),
-        }
-    }
-}
-
-#[derive(Debug, Default)]
-pub struct HttpResponse {
-    pub status: StatusCode,
-}
-
-impl HttpResponse {
-    pub fn new(status: StatusCode) -> Self {
-        HttpResponse { status }
-    }
-}
 
 impl Display for HttpResponse {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -61,6 +16,40 @@ impl Display for HttpResponse {
 
         write!(f, "{}", lines)
     }
+}
+
+async fn process_socket(socket: tokio::net::TcpStream, addr: std::net::SocketAddr) {
+    println!("Connection from {}", addr);
+
+    // read the request
+
+    let mut buf = [0; 1024];
+    let n = socket.try_read(&mut buf).unwrap();
+    let request = String::from_utf8(buf[0..n].to_vec()).unwrap();
+
+    println!("Request: {}", request);
+
+    let parsed_request = HttpRequest::try_from(request).unwrap();
+
+    println!("Parsed request: {:?}", parsed_request);
+
+    // write the response
+
+    let response = HttpResponse::new(
+        if parsed_request.header_line.path == "/"
+            || parsed_request.header_line.path == "/index.html"
+        {
+            StatusCode::Ok
+        } else {
+            StatusCode::NotFound
+        },
+    );
+
+    let response = format!("{}", response);
+
+    println!("Response: {}", response);
+
+    socket.try_write(response.as_bytes()).unwrap();
 }
 
 #[tokio::main]
@@ -79,12 +68,4 @@ async fn main() {
             process_socket(socket, addr).await;
         });
     }
-}
-
-async fn process_socket(socket: tokio::net::TcpStream, addr: std::net::SocketAddr) {
-    println!("Connection from {}", addr);
-
-    let response = HttpResponse::new(StatusCode::Ok);
-
-    socket.try_write(response.to_string().as_bytes()).unwrap();
 }
