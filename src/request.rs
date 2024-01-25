@@ -6,6 +6,7 @@ pub struct HttpRequest {
     pub headers: Vec<(String, String)>,
     pub body: String,
 }
+
 #[derive(Debug, Default)]
 pub enum RequestMethod {
     #[default]
@@ -90,6 +91,13 @@ impl HttpRequest {
             headers,
             body,
         }
+    }
+
+    pub fn get_header(&self, name: &str) -> Option<String> {
+        self.headers
+            .iter()
+            .find(|(header_name, _)| header_name == name)
+            .map(|(_, header_value)| header_value.clone())
     }
 }
 

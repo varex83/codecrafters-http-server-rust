@@ -9,6 +9,7 @@ use tokio::net::TcpListener;
 pub enum Command {
     Index,
     Echo(String),
+    UserAgent,
     Error,
 }
 
@@ -22,6 +23,7 @@ async fn path_handler(path: &str) -> (StatusCode, Command) {
     {
         [""] | ["index"] => (StatusCode::Ok, Command::Index),
         ["echo", value @ ..] => (StatusCode::Ok, Command::Echo(value.join("/").to_string())),
+        ["user-agent"] => (StatusCode::Ok, Command::UserAgent),
         _ => (StatusCode::NotFound, Command::Error),
     }
 }
@@ -55,6 +57,9 @@ async fn process_socket(
         match command {
             Command::Index => None,
             Command::Echo(value) => Some(ResponseBody::try_from(value.as_str())?),
+            Command::UserAgent => Some(ResponseBody::try_from(
+                parsed_request.get_header("User-Agent").unwrap().as_str(),
+            )?),
             Command::Error => None,
         },
     );
