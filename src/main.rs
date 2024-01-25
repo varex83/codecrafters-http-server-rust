@@ -3,6 +3,7 @@ mod response;
 
 use crate::request::HttpRequest;
 use crate::response::{HttpResponse, ResponseBody, StatusCode};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 
 #[derive(Debug)]
@@ -29,7 +30,7 @@ async fn path_handler(path: &str) -> (StatusCode, Command) {
 }
 
 async fn process_socket(
-    socket: tokio::net::TcpStream,
+    mut socket: tokio::net::TcpStream,
     addr: std::net::SocketAddr,
 ) -> anyhow::Result<()> {
     println!("Connection from {}", addr);
@@ -37,40 +38,54 @@ async fn process_socket(
     // read the request
 
     let mut buf = [0; 1024];
-    let n = socket.try_read(&mut buf)?;
-    let request = String::from_utf8(buf[0..n].to_vec())?;
 
-    println!("Request: {}", request);
+    match socket.read(&mut buf).await {
+        Ok(0) => {
+            println!("Connection closed");
+            Ok(())
+        }
+        Ok(n) => {
+            let request = String::from_utf8(buf[0..n].to_vec())?;
 
-    let parsed_request = HttpRequest::try_from(request)?;
+            println!("Request: {}", request);
 
-    println!("Parsed request: {:?}", parsed_request);
+            let parsed_request = HttpRequest::try_from(request)?;
 
-    // write the response
+            println!("Parsed request: {:?}", parsed_request);
 
-    let (status_code, command) = path_handler(&parsed_request.header_line.path).await;
+            // write the response
 
-    println!("Command: {:?}", command);
+            let (status_code, command) = path_handler(&parsed_request.header_line.path).await;
 
-    let response = HttpResponse::new(
-        status_code,
-        match command {
-            Command::Index => None,
-            Command::Echo(value) => Some(ResponseBody::try_from(value.as_str())?),
-            Command::UserAgent => Some(ResponseBody::try_from(
-                parsed_request.get_header("User-Agent").unwrap().as_str(),
-            )?),
-            Command::Error => None,
-        },
-    );
+            println!("Command: {:?}", command);
 
-    let response = format!("{}", response);
+            let response = HttpResponse::new(
+                status_code,
+                match command {
+                    Command::Index => None,
+                    Command::Echo(value) => Some(ResponseBody::try_from(value.as_str())?),
+                    Command::UserAgent => Some(ResponseBody::try_from(
+                        parsed_request.get_header("User-Agent").unwrap().as_str(),
+                    )?),
+                    Command::Error => None,
+                },
+            );
 
-    println!("Response: {}", response);
+            let response = format!("{}", response);
 
-    socket.try_write(response.as_bytes())?;
+            println!("Response: {}", response);
 
-    Ok(())
+            socket.write_all(response.as_bytes()).await?;
+
+            println!("Response sent");
+
+            Ok(())
+        }
+        Err(e) => {
+            println!("Failed to read from socket; err = {:?}", e);
+            Err(e.into())
+        }
+    }
 }
 
 #[tokio::main]

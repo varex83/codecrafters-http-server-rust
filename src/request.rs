@@ -3,7 +3,7 @@ use anyhow::{bail, Result};
 #[derive(Debug, Default)]
 pub struct HttpRequest {
     pub header_line: RequestHeaderLine,
-    pub headers: Vec<(String, String)>,
+    pub headers: Vec<HttpHeader>,
     pub body: String,
 }
 
@@ -81,11 +81,7 @@ impl TryFrom<String> for RequestHeaderLine {
 }
 
 impl HttpRequest {
-    pub fn new(
-        header_line: RequestHeaderLine,
-        headers: Vec<(String, String)>,
-        body: String,
-    ) -> Self {
+    pub fn new(header_line: RequestHeaderLine, headers: Vec<HttpHeader>, body: String) -> Self {
         HttpRequest {
             header_line,
             headers,
@@ -94,10 +90,13 @@ impl HttpRequest {
     }
 
     pub fn get_header(&self, name: &str) -> Option<String> {
-        self.headers
-            .iter()
-            .find(|(header_name, _)| header_name == name)
-            .map(|(_, header_value)| header_value.clone())
+        self.headers.iter().find_map(|header| {
+            if header.name == name {
+                Some(header.value.clone())
+            } else {
+                None
+            }
+        })
     }
 }
 
@@ -108,32 +107,22 @@ impl TryFrom<String> for HttpRequest {
         // <method> <path> <http-version>
         // headers: <name>: <value>
 
-        let lines = value
-            .split("\r\n")
-            .map(str::to_string)
-            .collect::<Vec<String>>();
+        let mut lines = value.split("\r\n");
 
-        let mut lines = lines
-            .iter()
-            .map(|line| line.trim().to_string())
-            .collect::<Vec<String>>();
+        let header_line = RequestHeaderLine::try_from(lines.next().unwrap().to_string())?;
 
-        lines.pop();
+        let mut headers = vec![];
 
-        let header_line = RequestHeaderLine::try_from(lines[0].clone())?;
-        let http_headers = lines[1..lines.len() - 1]
-            .iter()
-            .map(|line| HttpHeader::try_from(line.clone()))
-            .collect::<Result<Vec<HttpHeader>>>()?;
-        let body = lines[lines.len() - 1].clone();
+        for line in lines.clone() {
+            if line.is_empty() {
+                break;
+            } else {
+                headers.push(HttpHeader::try_from(line.to_string())?);
+            }
+        }
 
-        Ok(HttpRequest::new(
-            header_line,
-            http_headers
-                .iter()
-                .map(|header| (header.name.clone(), header.value.clone()))
-                .collect::<Vec<(String, String)>>(),
-            body,
-        ))
+        let body = lines.collect::<Vec<&str>>().join("\r\n");
+
+        Ok(HttpRequest::new(header_line, headers, body))
     }
 }
