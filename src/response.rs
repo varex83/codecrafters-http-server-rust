@@ -46,17 +46,13 @@ pub struct HttpResponse {
 
 impl Display for HttpResponse {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let mut lines = vec![
-            format!("HTTP/1.1 {} OK\r\n", self.status),
-            "\r\n".to_string(),
-        ]
-        .concat();
+        let mut lines = vec![format!("HTTP/1.1 {} OK", self.status)].concat();
 
         if let Some(body) = &self.body {
-            lines = format!("{}{}", lines, body);
+            lines = format!("{}\r\n{}", lines, body);
         }
 
-        write!(f, "{}", lines)
+        write!(f, "{}\r\n\r\n", lines)
     }
 }
 
