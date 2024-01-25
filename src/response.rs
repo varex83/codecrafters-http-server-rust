@@ -5,7 +5,11 @@ use std::fmt::{Display, Formatter};
 #[derive(Debug, Default)]
 pub enum StatusCode {
     #[default]
+    // 200
     Ok,
+    // 201
+    Created,
+    // 404
     NotFound,
 }
 
@@ -15,12 +19,9 @@ impl Display for StatusCode {
             f,
             "{}",
             match self {
-                StatusCode::Ok => {
-                    "200"
-                }
-                StatusCode::NotFound => {
-                    "404"
-                }
+                StatusCode::Ok => "200",
+                StatusCode::NotFound => "404",
+                StatusCode::Created => "201",
             }
         )
     }

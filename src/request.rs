@@ -1,27 +1,27 @@
 use anyhow::{bail, Result};
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct HttpRequest {
     pub header_line: RequestHeaderLine,
     pub headers: Vec<HttpHeader>,
     pub body: String,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub enum RequestMethod {
     #[default]
     GET,
     POST,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct RequestHeaderLine {
     pub method: RequestMethod,
     pub path: String,
     pub version: String,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct HttpHeader {
     pub name: String,
     pub value: String,
@@ -106,22 +106,26 @@ impl TryFrom<String> for HttpRequest {
     fn try_from(value: String) -> Result<Self> {
         // <method> <path> <http-version>
         // headers: <name>: <value>
+        //
+        // <body>
 
         let mut lines = value.split("\r\n");
 
         let header_line = RequestHeaderLine::try_from(lines.next().unwrap().to_string())?;
 
         let mut headers = vec![];
+        let mut body = String::new();
 
-        for line in lines.clone() {
-            if line.is_empty() {
-                break;
-            } else {
+        let mut body_started = false;
+        for line in lines {
+            if line.is_empty() && !body_started {
+                body_started = true;
+            } else if !body_started {
                 headers.push(HttpHeader::try_from(line.to_string())?);
+            } else {
+                body += line;
             }
         }
-
-        let body = lines.collect::<Vec<&str>>().join("\r\n");
 
         Ok(HttpRequest::new(header_line, headers, body))
     }
