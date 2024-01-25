@@ -41,10 +41,56 @@ impl TryFrom<&str> for StatusCode {
 #[derive(Debug, Default)]
 pub struct HttpResponse {
     pub status: StatusCode,
+    pub body: Option<ResponseBody>,
+}
+
+impl Display for HttpResponse {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let mut lines = vec![
+            format!("HTTP/1.1 {} OK\r\n", self.status),
+            "\r\n".to_string(),
+        ]
+        .concat();
+
+        if let Some(body) = &self.body {
+            lines = format!("{}{}", lines, body);
+        }
+
+        write!(f, "{}", lines)
+    }
 }
 
 impl HttpResponse {
-    pub fn new(status: StatusCode) -> Self {
-        HttpResponse { status }
+    pub fn new(status: StatusCode, body: Option<ResponseBody>) -> Self {
+        HttpResponse { status, body }
+    }
+}
+
+#[derive(Debug, Default)]
+pub struct ResponseBody {
+    pub content_type: String,
+    pub content: String,
+}
+
+impl Display for ResponseBody {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Content-Type: {}\r\nContent-Length: {}\r\n\r\n{}",
+            self.content_type,
+            self.content.len(),
+            self.content
+        )
+    }
+}
+
+impl TryFrom<&str> for ResponseBody {
+    type Error = anyhow::Error;
+
+    fn try_from(value: &str) -> Result<Self> {
+        Ok(Self {
+            content_type: "text/plain".to_string(),
+            content: value.to_string(),
+        })
     }
 }
