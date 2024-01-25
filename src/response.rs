@@ -90,3 +90,10 @@ impl TryFrom<&str> for ResponseBody {
         })
     }
 }
+
+impl ResponseBody {
+    pub fn with_content_type(mut self, content_type: &str) -> Self {
+        self.content_type = content_type.to_string();
+        self
+    }
+}
